@@ -30,7 +30,47 @@ st.markdown(
       border:1px solid rgba(255,255,255,.1); background:linear-gradient(115deg,rgba(24,119,242,.2),rgba(244,166,35,.08)); }
     .fbhero small { color:#55a1ff; font-weight:800; letter-spacing:.12em; }
     .fbhero h1 { margin:.25rem 0;color:white; } .fbhero p { color:#bdcbd7;margin:0; }
-    .step { color:#55a1ff;font-size:.76rem;font-weight:800;letter-spacing:.11em;margin-top:.65rem; }
+    .step { color:#79b8ff !important;font-size:.76rem;font-weight:800;letter-spacing:.11em;margin-top:.65rem; }
+    [data-testid="stWidgetLabel"],
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] span,
+    [data-testid="stFileUploader"] > label,
+    [data-testid="stFileUploader"] > label p,
+    [data-testid="stSlider"] > label,
+    [data-testid="stSlider"] > label p,
+    [data-testid="stTextInput"] > label,
+    [data-testid="stTextInput"] > label p,
+    [data-testid="stNumberInput"] > label,
+    [data-testid="stNumberInput"] > label p,
+    [data-testid="stSelectbox"] > label,
+    [data-testid="stSelectbox"] > label p,
+    [data-testid="stRadio"] > label,
+    [data-testid="stRadio"] > label p,
+    [data-testid="stToggle"] label p {
+        color:#eef6fb !important;
+        opacity:1 !important;
+        font-weight:600 !important;
+    }
+    [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
+        color:#bed0dc !important;
+    }
+    [data-testid="stExpander"] {
+        border-color:rgba(255,255,255,.16) !important;
+        background:rgba(255,255,255,.035) !important;
+    }
+    [data-testid="stExpander"] details summary,
+    [data-testid="stExpander"] details summary p,
+    [data-testid="stExpander"] details summary span {
+        color:#eef6fb !important;
+        background:#142b3d !important;
+        font-weight:700 !important;
+    }
+    [data-testid="stFileUploaderDropzone"] p,
+    [data-testid="stFileUploaderDropzone"] span,
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input {
+        color:#132638 !important;
+    }
     div[data-testid="stMetric"] { background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:12px;border-radius:14px; }
     .stButton > button[kind="primary"] { background:#1877f2;color:white;border:0;font-weight:800; }
     </style>

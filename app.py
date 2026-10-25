@@ -32,7 +32,47 @@ st.markdown(
     .eyebrow { color:#f4a623; font-weight:700; letter-spacing:.13em; font-size:.78rem; }
     .hero h1 { color:#fff; margin:.25rem 0 .35rem; font-size:2.35rem; }
     .hero p { color:#b9c9d6; margin:0; max-width:780px; }
-    .step { color:#f4a623; font-size:.76rem; font-weight:800; letter-spacing:.11em; margin-bottom:.15rem; }
+    .step { color:#ffb52e !important; font-size:.76rem; font-weight:800; letter-spacing:.11em; margin-bottom:.15rem; }
+    /* High-contrast labels on the dark studio canvas. */
+    [data-testid="stWidgetLabel"],
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] span,
+    [data-testid="stFileUploader"] > label,
+    [data-testid="stFileUploader"] > label p,
+    [data-testid="stSlider"] > label,
+    [data-testid="stSlider"] > label p,
+    [data-testid="stTextInput"] > label,
+    [data-testid="stTextInput"] > label p,
+    [data-testid="stNumberInput"] > label,
+    [data-testid="stNumberInput"] > label p,
+    [data-testid="stSelectbox"] > label,
+    [data-testid="stSelectbox"] > label p,
+    [data-testid="stToggle"] label p {
+        color:#eef6fb !important;
+        opacity:1 !important;
+        font-weight:600 !important;
+    }
+    [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
+        color:#bed0dc !important;
+    }
+    [data-testid="stExpander"] {
+        border-color:rgba(255,255,255,.16) !important;
+        background:rgba(255,255,255,.035) !important;
+    }
+    [data-testid="stExpander"] details summary,
+    [data-testid="stExpander"] details summary p,
+    [data-testid="stExpander"] details summary span {
+        color:#eef6fb !important;
+        background:#142b3d !important;
+        font-weight:700 !important;
+    }
+    /* Preserve dark text inside light form controls and upload panels. */
+    [data-testid="stFileUploaderDropzone"] p,
+    [data-testid="stFileUploaderDropzone"] span,
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input {
+        color:#132638 !important;
+    }
     div[data-testid="stMetric"] { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); padding:12px; border-radius:14px; }
     .stButton > button[kind="primary"] { background:#f4a623; color:#102235; border:0; font-weight:800; }
     .stDownloadButton > button { border-color:#f4a623; color:#f4a623; }
