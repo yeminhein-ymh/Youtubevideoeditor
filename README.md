@@ -8,6 +8,7 @@ A local Streamlit app that converts a raw lecture or screen recording into a You
 - optional low-volume background music
 - generated 1280×720 YouTube thumbnail
 - 30-second preview mode before a long final render
+- smart 10–15 minute topic splitting at natural speaking pauses
 
 The default **Reference style** preset is based on the supplied sample: 1920×1080, 30 fps, an approximately 8-second cover, lecture content, and a short end card.
 
@@ -22,7 +23,9 @@ Then upload the raw recording, cover, optional song, and optional end card. Keep
 
 ## Notes for long recordings
 
-The supplied raw recording is about 2 hours 17 minutes. A full 1080p render can take a long time and needs several gigabytes of free disk space. The browser upload limit is configured to 4 GB. Finished files are stored in the local `renders` folder, and files over 500 MB are intentionally not copied into browser memory for download.
+The supplied raw recording is about 2 hours 17 minutes. A full 1080p render can take a long time and needs several gigabytes of free disk space. Raw and reference uploads are configured for files up to 1 GB. Finished files are stored in the local `renders` folder, and files over 500 MB are intentionally not copied into browser memory for download.
+
+Smart topic splitting scans the lecture audio for longer speaking pauses, selects natural boundaries near the configured 10–15 minute range, shows the complete cut plan, and produces a separate MP4 and thumbnail for each part. Optional topic names can be supplied one per line.
 
 Only use music and artwork that you own or are licensed to publish on YouTube.
 

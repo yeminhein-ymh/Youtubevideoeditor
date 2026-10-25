@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from video_editor import RenderSettings, VideoInfo, build_render_command, format_duration
+from video_editor import RenderSettings, VideoInfo, build_render_command, format_duration, plan_topic_segments
 
 
 class VideoEditorTests(unittest.TestCase):
@@ -36,6 +36,14 @@ class VideoEditorTests(unittest.TestCase):
             joined = " ".join(command)
             self.assertIn("scale=1080:1920:force_original_aspect_ratio=increase", joined)
             self.assertIn("crop=1080:1920", joined)
+
+    def test_topic_plan_prefers_natural_pauses(self):
+        pauses = [(620, 1.4), (760, 2.8), (910, 4.0), (1490, 2.2)]
+        segments = plan_topic_segments(0, 1800, pauses, 10, 15, ["Overview", "Components"])
+        self.assertEqual(len(segments), 2)
+        self.assertEqual(segments[0].end, 760)
+        self.assertEqual(segments[0].title, "Overview")
+        self.assertEqual(segments[1].title, "Components")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,17 @@ class VideoInfo:
 
 
 @dataclass(frozen=True)
+class TopicSegment:
+    start: float
+    end: float
+    title: str
+
+    @property
+    def duration(self) -> float:
+        return self.end - self.start
+
+
+@dataclass(frozen=True)
 class RenderSettings:
     start: float = 0.0
     end: float | None = None
@@ -83,6 +94,88 @@ def probe_video(path: Path) -> VideoInfo:
         r"Video:.*?,\s*(?:[^,]+,\s*)?(\d{2,5})x(\d{2,5})(?:[^\n]*?)(\d+(?:\.\d+)?)\s*fps",
         output,
     )
+
+
+def detect_silence_centers(
+    path: Path,
+    start: float = 0.0,
+    end: float | None = None,
+    noise_db: int = -35,
+    minimum_silence: float = 1.2,
+) -> list[tuple[float, float]]:
+    """Return (absolute midpoint, duration) for meaningful pauses in the audio."""
+    command = [find_ffmpeg(), "-hide_banner", "-nostats", "-ss", f"{max(0, start):.3f}"]
+    if end is not None and end > start:
+        command += ["-t", f"{end - start:.3f}"]
+    command += [
+        "-i",
+        str(path),
+        "-vn",
+        "-af",
+        f"silencedetect=noise={noise_db}dB:d={minimum_silence}",
+        "-f",
+        "null",
+        "-",
+    ]
+    output = _run_capture(command)
+    starts = [float(value) for value in re.findall(r"silence_start:\s*([0-9.]+)", output)]
+    ends = [
+        (float(end_value), float(duration))
+        for end_value, duration in re.findall(
+            r"silence_end:\s*([0-9.]+)\s*\|\s*silence_duration:\s*([0-9.]+)", output
+        )
+    ]
+    pauses: list[tuple[float, float]] = []
+    for silence_start, (silence_end, duration) in zip(starts, ends):
+        midpoint = start + silence_start + (silence_end - silence_start) / 2
+        pauses.append((midpoint, duration))
+    return pauses
+
+
+def plan_topic_segments(
+    start: float,
+    end: float,
+    pauses: list[tuple[float, float]],
+    minimum_minutes: float = 10.0,
+    maximum_minutes: float = 15.0,
+    names: list[str] | None = None,
+) -> list[TopicSegment]:
+    """Split a timeline at strong pauses close to the preferred topic length."""
+    minimum = max(60.0, minimum_minutes * 60)
+    maximum = max(minimum + 60.0, maximum_minutes * 60)
+    target = (minimum + maximum) / 2
+    cursor = max(0.0, start)
+    finish = max(cursor, end)
+    boundaries = [cursor]
+    pause_candidates = sorted(pauses, key=lambda item: item[0])
+
+    while finish - cursor > maximum:
+        # A split cannot produce two clips that both satisfy the minimum length.
+        # Keep one slightly longer final topic instead of creating a tiny tail.
+        if finish - cursor < 2 * minimum:
+            break
+        candidates = [item for item in pause_candidates if cursor + minimum <= item[0] <= cursor + maximum]
+        # Avoid creating a tiny final part where possible.
+        candidates_with_tail = [item for item in candidates if finish - item[0] >= minimum]
+        if candidates_with_tail:
+            candidates = candidates_with_tail
+        if candidates:
+            # Prefer proximity to target, then a longer silence when two candidates are similar.
+            cut, _ = min(candidates, key=lambda item: (abs((item[0] - cursor) - target), -item[1]))
+        else:
+            cut = min(cursor + target, finish)
+        if cut <= cursor + 1:
+            break
+        boundaries.append(cut)
+        cursor = cut
+    boundaries.append(finish)
+
+    clean_names = [name.strip() for name in (names or []) if name.strip()]
+    segments: list[TopicSegment] = []
+    for index, (segment_start, segment_end) in enumerate(zip(boundaries, boundaries[1:]), start=1):
+        title = clean_names[index - 1] if index <= len(clean_names) else f"Topic {index}"
+        segments.append(TopicSegment(segment_start, segment_end, title))
+    return segments
     if not duration_match or not video_match:
         raise ValueError("Could not read this video's duration or dimensions.")
     hours, minutes, seconds = duration_match.groups()

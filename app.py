@@ -2,17 +2,21 @@ from __future__ import annotations
 
 import hashlib
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import streamlit as st
 
 from video_editor import (
     RenderSettings,
+    TopicSegment,
     build_render_command,
     create_thumbnail,
+    detect_silence_centers,
     extract_frame,
     find_ffmpeg,
     format_duration,
+    plan_topic_segments,
     probe_video,
     render_video,
 )
@@ -126,13 +130,13 @@ with source_col:
     raw_upload = st.file_uploader(
         "Raw recording (required)",
         type=["mp4", "mov", "mkv", "m4v", "webm"],
-        help="Large files are supported. For the supplied two-hour recording, rendering may take significant time.",
+        help="Files up to 1 GB are supported. Long recordings can be divided into 10–15 minute topic videos.",
     )
 with reference_col:
     reference_upload = st.file_uploader(
         "Sample/reference video (optional)",
         type=["mp4", "mov", "mkv", "m4v", "webm"],
-        help="Kept as a visual reference; it is not inserted into the final video.",
+        help="Up to 1 GB. Kept as a visual reference; it is not inserted into the final video.",
     )
 
 info = None
@@ -206,6 +210,31 @@ with o2:
 with o3:
     enhance = st.toggle("Gentle contrast & color", value=False)
 
+with st.expander("Smart topic split · 10–15 minute videos", expanded=True):
+    smart_split = st.toggle(
+        "Automatically split at natural speaking pauses",
+        value=True,
+        help="The editor detects longer pauses and chooses the strongest break near the preferred topic length.",
+    )
+    split1, split2, split3 = st.columns(3)
+    with split1:
+        minimum_topic_minutes = st.slider("Minimum topic length", 5, 14, 10, 1)
+    with split2:
+        maximum_topic_minutes = st.slider(
+            "Maximum topic length", minimum_topic_minutes + 1, 20, max(15, minimum_topic_minutes + 1), 1
+        )
+    with split3:
+        minimum_pause = st.slider("Topic-change pause", 0.6, 3.0, 1.2, 0.1)
+    topic_names_text = st.text_area(
+        "Optional topic names · one per line",
+        placeholder="Solar PV overview\nPV modules\nCharge controllers\nInverters",
+        help="Names are assigned in order. Any remaining clips are named Topic 1, Topic 2, and so on.",
+    )
+    st.caption(
+        "This language-independent mode uses speaking pauses as likely topic boundaries. "
+        "Preview mode renders only the first 30 seconds of the first planned topic."
+    )
+
 with st.expander("What the smooth edit does"):
     st.markdown(
         "- Fits every source into a clean 16:9 canvas without stretching\n"
@@ -237,10 +266,7 @@ if render_clicked:
                 thumb_background = extract_frame(
                     raw_path, session_folder / "thumbnail_frame.jpg", min(frame_time, info.duration - 0.1)
                 )
-        thumbnail_path = create_thumbnail(
-            thumb_background, session_folder / "youtube_thumbnail.jpg", title, subtitle, author
-        )
-        settings = RenderSettings(
+        base_settings = RenderSettings(
             start=trim_start,
             end=trim_end if trim_end > 0 else None,
             width=output_width,
@@ -256,52 +282,135 @@ if render_clicked:
             normalize_audio=normalize_audio,
             enhance=enhance,
         )
-        filename = "youtube_preview.mp4" if preview_only else "youtube_ready.mp4"
-        output_path = session_folder / filename
-        command, total_duration = build_render_command(
-            raw_path,
-            output_path,
-            settings,
-            info,
-            cover=cover_path,
-            music=music_path,
-            outro=outro_path,
-            preview_seconds=30 if preview_only else None,
+        effective_end = min(trim_end, info.duration) if trim_end > 0 else info.duration
+        if smart_split:
+            with st.spinner("Analyzing speech pauses and planning topic boundaries…"):
+                pauses = (
+                    detect_silence_centers(
+                        raw_path,
+                        start=trim_start,
+                        end=effective_end,
+                        minimum_silence=minimum_pause,
+                    )
+                    if info.has_audio
+                    else []
+                )
+                topic_names = topic_names_text.splitlines()
+                segments = plan_topic_segments(
+                    trim_start,
+                    effective_end,
+                    pauses,
+                    minimum_minutes=minimum_topic_minutes,
+                    maximum_minutes=maximum_topic_minutes,
+                    names=topic_names,
+                )
+            st.markdown("#### Planned topic videos")
+            st.dataframe(
+                [
+                    {
+                        "Part": index,
+                        "Topic": segment.title,
+                        "Start": format_duration(segment.start),
+                        "End": format_duration(segment.end),
+                        "Length": format_duration(segment.duration),
+                    }
+                    for index, segment in enumerate(segments, start=1)
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            segments = [TopicSegment(trim_start, effective_end, subtitle or "Complete video")]
+
+        render_segments = segments[:1] if preview_only else segments
+        progress = st.progress(0.0, text="Preparing render…")
+        results: list[dict[str, str]] = []
+        total_parts = len(render_segments)
+        for index, segment in enumerate(render_segments, start=1):
+            part_number = index
+            part_label = segment.title if smart_split else subtitle
+            thumbnail_path = create_thumbnail(
+                thumb_background,
+                session_folder / f"youtube_thumbnail_{part_number:02d}.jpg",
+                title,
+                part_label or f"PART {part_number}",
+                author,
+            )
+            suffix = "_preview" if preview_only else ""
+            filename = (
+                f"topic_{part_number:02d}{suffix}.mp4"
+                if smart_split
+                else f"youtube{'_preview' if preview_only else '_ready'}.mp4"
+            )
+            output_path = session_folder / filename
+            settings = replace(base_settings, start=segment.start, end=segment.end)
+            command, total_duration = build_render_command(
+                raw_path,
+                output_path,
+                settings,
+                info,
+                cover=cover_path,
+                music=music_path,
+                outro=outro_path,
+                preview_seconds=30 if preview_only else None,
+            )
+
+            def update(value: float, message: str, current=index) -> None:
+                overall = ((current - 1) + value) / total_parts
+                progress.progress(overall, text=f"Part {current}/{total_parts} · {message}")
+
+            render_video(command, total_duration, update)
+            results.append(
+                {
+                    "video": str(output_path),
+                    "thumbnail": str(thumbnail_path),
+                    "title": segment.title,
+                    "duration": format_duration(min(segment.duration, 30) if preview_only else segment.duration),
+                }
+            )
+        st.session_state["latest_results"] = results
+        st.success(
+            "Preview ready." if preview_only else f"Created {len(results)} YouTube-ready topic video(s)."
         )
-        progress = st.progress(0.0, text="Starting FFmpeg…")
-
-        def update(value: float, message: str) -> None:
-            progress.progress(value, text=message)
-
-        render_video(command, total_duration, update)
-        st.session_state["latest_video"] = str(output_path)
-        st.session_state["latest_thumbnail"] = str(thumbnail_path)
-        st.success("Your YouTube package is ready.")
     except Exception as exc:
         st.error(f"Render failed: {exc}")
 
-video_result = Path(st.session_state.get("latest_video", ""))
-thumbnail_result = Path(st.session_state.get("latest_thumbnail", ""))
-if video_result.is_file() and thumbnail_result.is_file():
+latest_results = st.session_state.get("latest_results", [])
+valid_results = [
+    result
+    for result in latest_results
+    if Path(result.get("video", "")).is_file() and Path(result.get("thumbnail", "")).is_file()
+]
+if valid_results:
     st.markdown("### Finished package")
-    left, right = st.columns([1.5, 1])
-    with left:
-        st.video(str(video_result))
-        st.caption(f"Saved to: {video_result}")
-        if video_result.stat().st_size <= 500 * 1024 * 1024:
-            with video_result.open("rb") as video_file:
+    for index, result in enumerate(valid_results, start=1):
+        video_result = Path(result["video"])
+        thumbnail_result = Path(result["thumbnail"])
+        st.markdown(f"#### Part {index} · {result['title']} · {result['duration']}")
+        left, right = st.columns([1.5, 1])
+        with left:
+            st.video(str(video_result))
+            st.caption(f"Saved to: {video_result}")
+            if video_result.stat().st_size <= 500 * 1024 * 1024:
+                with video_result.open("rb") as video_file:
+                    st.download_button(
+                        f"Download Part {index} MP4",
+                        video_file,
+                        file_name=video_result.name,
+                        mime="video/mp4",
+                        use_container_width=True,
+                        key=f"download_video_{index}_{video_result.name}",
+                    )
+            else:
+                st.info("This MP4 is over 500 MB. Use the saved file path instead of browser download.")
+        with right:
+            st.image(str(thumbnail_result), caption="1280×720 thumbnail", use_container_width=True)
+            with thumbnail_result.open("rb") as thumbnail_file:
                 st.download_button(
-                    "Download MP4", video_file, file_name=video_result.name, mime="video/mp4", use_container_width=True
+                    f"Download Part {index} thumbnail",
+                    thumbnail_file,
+                    file_name=thumbnail_result.name,
+                    mime="image/jpeg",
+                    use_container_width=True,
+                    key=f"download_thumbnail_{index}_{thumbnail_result.name}",
                 )
-        else:
-            st.info("The MP4 is over 500 MB. Use the saved file path above instead of loading it into the browser.")
-    with right:
-        st.image(str(thumbnail_result), caption="1280×720 YouTube thumbnail", use_container_width=True)
-        with thumbnail_result.open("rb") as thumbnail_file:
-            st.download_button(
-                "Download thumbnail",
-                thumbnail_file,
-                file_name="youtube_thumbnail.jpg",
-                mime="image/jpeg",
-                use_container_width=True,
-            )
