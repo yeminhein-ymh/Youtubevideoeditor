@@ -1,11 +1,35 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from video_editor import RenderSettings, VideoInfo, build_render_command, format_duration, plan_topic_segments
+from video_editor import (
+    RenderSettings,
+    VideoInfo,
+    build_render_command,
+    format_duration,
+    plan_topic_segments,
+    probe_video,
+)
 
 
 class VideoEditorTests(unittest.TestCase):
+    @patch("video_editor.find_ffmpeg", return_value="ffmpeg")
+    @patch("video_editor._run_capture")
+    def test_probe_video_returns_metadata(self, run_capture, _find_ffmpeg):
+        run_capture.return_value = """
+          Duration: 02:17:09.25, start: 0.000000, bitrate: 4200 kb/s
+          Stream #0:0: Video: h264, yuv420p, 1920x1080, 29.97 fps
+          Stream #0:1: Audio: aac, 48000 Hz, stereo
+        """
+
+        info = probe_video(Path("lecture.mp4"))
+
+        self.assertEqual(info.duration, 8229.25)
+        self.assertEqual((info.width, info.height), (1920, 1080))
+        self.assertEqual(info.fps, 29.97)
+        self.assertTrue(info.has_audio)
+
     def test_format_duration(self):
         self.assertEqual(format_duration(8229.25), "02:17:09")
 

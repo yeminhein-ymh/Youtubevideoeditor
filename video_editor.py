@@ -94,6 +94,17 @@ def probe_video(path: Path) -> VideoInfo:
         r"Video:.*?,\s*(?:[^,]+,\s*)?(\d{2,5})x(\d{2,5})(?:[^\n]*?)(\d+(?:\.\d+)?)\s*fps",
         output,
     )
+    if not duration_match or not video_match:
+        raise ValueError("Could not read this video's duration or dimensions.")
+    hours, minutes, seconds = duration_match.groups()
+    duration = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    return VideoInfo(
+        duration=duration,
+        width=int(video_match.group(1)),
+        height=int(video_match.group(2)),
+        fps=float(video_match.group(3)),
+        has_audio="Audio:" in output,
+    )
 
 
 def detect_silence_centers(
@@ -176,17 +187,6 @@ def plan_topic_segments(
         title = clean_names[index - 1] if index <= len(clean_names) else f"Topic {index}"
         segments.append(TopicSegment(segment_start, segment_end, title))
     return segments
-    if not duration_match or not video_match:
-        raise ValueError("Could not read this video's duration or dimensions.")
-    hours, minutes, seconds = duration_match.groups()
-    duration = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-    return VideoInfo(
-        duration=duration,
-        width=int(video_match.group(1)),
-        height=int(video_match.group(2)),
-        fps=float(video_match.group(3)),
-        has_audio="Audio:" in output,
-    )
 
 
 def format_duration(seconds: float) -> str:
