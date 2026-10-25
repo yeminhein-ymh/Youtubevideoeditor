@@ -1,0 +1,6 @@
+renders/
+__pycache__/
+*.pyc
+sample_*.jpg
+raw_contact.jpg
+
